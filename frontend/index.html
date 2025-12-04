@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Social Library App</title>
+    <link rel="stylesheet" href="css/style.css"> 
+    </head>
+<body>
+    <header id="header">
+        <div id="app-title">
+             <h1><a href="#">Social Library</a></h1>
+        </div>
+        
+        <div id="auth-nav" style="display: none;">
+            <a href="#feed">Akış</a>
+            <a href="#library">Kütüphane</a>
+            <a href="#profile/me">Profilim</a>
+            <a href="#logout" id="logout-link">Çıkış Yap</a>
+        </div>
+        
+        <div id="public-nav" style="display: none;">
+            <a href="#login">Giriş Yap</a>
+        </div>
+        
+        <div id="search-bar" style="display: none;">
+             <form action="#search" onsubmit="event.preventDefault(); window.location.hash = '#search?q=' + document.getElementById('search-input').value;">
+                 <input type="search" id="search-input" placeholder="Kitap veya Film Ara...">
+             </form>
+        </div>
+    </header>
+
+    <main id="main-content">
+        <p>Uygulama Yükleniyor...</p>
+    </main>
+    
+    <script type="module" src="js/main.js"></script> 
+</body>
+</html>

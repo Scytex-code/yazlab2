@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.pyc
+*.log
+db.sqlite3
+/staticfiles/
+social_media_project/settings_local.py
