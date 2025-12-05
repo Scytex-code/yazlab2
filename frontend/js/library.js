@@ -245,16 +245,11 @@ export const renderListDetailPage = async (listId) => {
             listItemsElement.innerHTML = '<p>Bu listede henüz içerik yok.</p>';
             return;
         }
-        
-        // library.js içinde, renderListDetailPage fonksiyonunda
 
         let html = listItems.map(item => { 
             const content = item.content_details; 
  
-            // 🌟 GÜNCELLEME: ContentType adı genelde büyük harfle gelir (Book/Movie). 
-            // Eğer Serileştiriciniz bu bilgiyi ContentType ID'si olarak değil de Model Adı olarak döndürüyorsa, 
-            // bunu küçük harfe dönüştürerek URL'ye güvenli şekilde gönderin.
-            const type = (content.content_type || 'Bilinmiyor').toLowerCase(); // 🌟 content.js'in beklediği formata zorla
+            const type = (content.content_type || 'Bilinmiyor').toLowerCase(); 
 
             const coverUrl = content.poster_path || content.cover_url || 'placeholder.png';
             const creator = content.authors || content.director || 'Bilinmiyor';

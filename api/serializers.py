@@ -15,7 +15,6 @@ User = get_user_model()
 
 
 class ContentTypeField(serializers.Field):
-    """ 'book' veya 'movie' gibi stringleri ContentType nesnesine çevirir. """
     def to_internal_value(self, data):
         if data is None or not isinstance(data, str) or data.strip() == '':
             raise serializers.ValidationError("İçerik tipi ('book', 'movie' vb.) zorunludur ve metin olmalıdır.")
@@ -98,13 +97,10 @@ class RatingSerializer(serializers.ModelSerializer):
         return rating
 
 
-# api/serializers.py (ReviewSerializer)
-
 class ReviewSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
     likes_count = serializers.SerializerMethodField()
     
-    # ⭐ YENİ EKLEME: Kullanıcının beğenip beğenmediği (Frontend için)
     is_liked = serializers.SerializerMethodField() 
     
     content_type = ContentTypeField(write_only=True)
@@ -119,7 +115,6 @@ class ReviewSerializer(serializers.ModelSerializer):
     def get_likes_count(self, obj):
         return obj.likes.count()
 
-    # ⭐ YENİ METOT: Kullanıcının beğenip beğenmediğini kontrol eder
     def get_is_liked(self, obj):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
@@ -255,13 +250,13 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
 class BookSerializer(serializers.ModelSerializer):
     class Meta:
         model = Book
-        fields = ['id', 'title', 'authors', 'cover_url', 'description'] 
+        fields = ['id', 'title', 'authors', 'cover_url', 'description', 'publication_year', 'genres_list'] 
 
 
 class MovieSerializer(serializers.ModelSerializer):
     class Meta:
         model = Movie
-        fields = ['id', 'title', 'release_date', 'poster_path', 'overview']
+        fields = ['id', 'title', 'release_date', 'poster_path', 'overview', 'director_name', 'actors_list', 'genres_list']
 
 
 def _get_content_type_filter(obj):
@@ -366,7 +361,7 @@ class MovieDetailSerializer(serializers.ModelSerializer):
         return None
 
 
-class ListItemSerializer(serializers.Serializer): 
+class ListItemSerializer(serializers.ModelSerializer): 
     content_type = ContentTypeField(required=True) 
     object_id = serializers.IntegerField(required=True) 
     list = serializers.PrimaryKeyRelatedField(
@@ -374,32 +369,36 @@ class ListItemSerializer(serializers.Serializer):
         required=True
     )
     
-    id = serializers.IntegerField(read_only=True)
     content_details = serializers.SerializerMethodField(read_only=True)
-    added_at = serializers.DateTimeField(read_only=True)
+    
+    class Meta: 
+        model = ListItem
+        fields = ['id', 'list', 'content_type', 'object_id', 'added_at', 'content_details']
+        read_only_fields = ['id', 'added_at'] 
+
 
     def create(self, validated_data):
+        model_fields = {
+            'list': validated_data['list'],
+            'content_type': validated_data['content_type'],
+            'object_id': validated_data['object_id'],
+        }
+        
         try:
             list_item, created = ListItem.objects.get_or_create(
-                list=validated_data['list'],
-                content_type=validated_data['content_type'],
-                object_id=validated_data['object_id'],
-                defaults=validated_data
+                **model_fields,
+                defaults={} 
             )
             return list_item
         except Exception as e:
-            raise serializers.ValidationError({"db_error": f"Veritabanı kaydetme hatası: {e}"})
-
+            raise serializers.ValidationError({"server_error": f"İçerik listeye eklenirken veritabanı hatası oluştu: {e}"})
+            
     def to_representation(self, instance):
-        ret = {
-            'id': instance.id,
-            'list': instance.list.pk,
-            'content_details': self.get_content_details(instance),
-            'added_at': instance.added_at,
-        }
+        ret = super().to_representation(instance) 
+        ret['list'] = instance.list.pk 
+        ret['content_details'] = self.get_content_details(instance)
         return ret
     
-
     def get_content_details(self, obj):
         target_content = obj.content_object
         if not target_content:
@@ -431,7 +430,7 @@ class ActivitySerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True) 
     activity_type_display = serializers.CharField(source='get_activity_type_display', read_only=True)
     content_object_details = serializers.SerializerMethodField()
-    interaction_id = serializers.SerializerMethodField() # Bu alan zaten vardı
+    interaction_id = serializers.SerializerMethodField() 
 
     class Meta:
         model = Activity
@@ -442,18 +441,15 @@ class ActivitySerializer(serializers.ModelSerializer):
         ]
         
     def get_interaction_id(self, obj):
-        # ... (Bu metot aynı kalır, Review/Rating PK'sını döndürür)
         if obj.activity_type in [1, 2] and obj.content_object:
             return obj.content_object.pk 
         return None 
 
-    # ⭐ KRİTİK DÜZELTME: content_object_details metodunu değiştiriyoruz
     def get_content_object_details(self, obj):
         source_object = obj.content_object
         if not source_object:
             return None
 
-        # 1. Puanlama (Rating) Aktivitesi
         if obj.activity_type == 1: 
             target_content = source_object.content_object
             if not target_content: return None
@@ -461,13 +457,9 @@ class ActivitySerializer(serializers.ModelSerializer):
 
             content_data = BookSerializer(target_content).data if content_type_name == 'Book' else MovieSerializer(target_content).data
             
-            # ⭐ YENİ EKLEMELER: Rating objesinden likes_count ve is_liked çekiliyor.
             request = self.context.get('request')
             is_liked = False
             if request and request.user.is_authenticated:
-                # Rating modelinde likes alanı olduğunu varsayıyoruz
-                # Eğer Rating modelinde likes alanı YOKSA, bu satır HATA verir.
-                # Şimdilik varsayarak ilerliyoruz, yoksa bu kısmı değiştiririz.
                 if hasattr(source_object, 'likes'):
                     is_liked = source_object.likes.filter(pk=request.user.pk).exists()
 
@@ -476,29 +468,23 @@ class ActivitySerializer(serializers.ModelSerializer):
                 'content_data': content_data,
                 'score': source_object.score,
                 'rating_id': source_object.pk,
-                
-                # ⭐ BEĞENİ VERİLERİ EKLENİYOR
                 'likes_count': source_object.likes.count() if hasattr(source_object, 'likes') else 0,
                 'is_liked': is_liked,
             }
 
-        # 2. Yorumlama (Review) Aktivitesi
         elif obj.activity_type == 2:
-            # ⭐ Review objesini ReviewSerializer ile serileştirerek tüm detayları (likes_count dahil) alıyoruz.
             review_data = ReviewSerializer(source_object, context=self.context).data
-            
-            # İçerik detaylarını da (Kitap/Film) ekleyelim
+
             content_type_name = source_object.content_object.__class__.__name__
             content_data = BookSerializer(source_object.content_object).data if content_type_name == 'Book' else MovieSerializer(source_object.content_object).data
             
             return {
                 'content_type': content_type_name,
                 'content_data': content_data,
-                'review_details': review_data, # ⭐ TÜM REVIEW DATA ARTIK BURADA
+                'review_details': review_data, 
                 'review_excerpt': source_object.text[:200] + '...'
             }
 
-        # 3. Listeye Ekleme Aktivitesi
         elif obj.activity_type == 3: 
             target_content = source_object.content_object
             if not target_content: return None
@@ -513,7 +499,6 @@ class ActivitySerializer(serializers.ModelSerializer):
                 'list_name': source_object.list.name, 
             }
             
-        # 4. Takip Aktivitesi
         elif obj.activity_type == 4 and hasattr(source_object, 'following'):
             return {
                 'followed_user': UserSerializer(source_object.following).data
@@ -523,7 +508,6 @@ class ActivitySerializer(serializers.ModelSerializer):
     
 
 class ReplySerializer(serializers.ModelSerializer):
-    # Bu alanlar Frontend'den gelmeli
     content_type = ContentTypeField(write_only=True) 
     object_id = serializers.IntegerField(write_only=True)
     
@@ -533,19 +517,8 @@ class ReplySerializer(serializers.ModelSerializer):
         read_only_fields = ['user', 'created_at']
         
     def create(self, validated_data):
-        # user'ı context'ten almamız gerekmiyor, çünkü ViewSet bunu save() ile zaten gönderiyor.
-        # Ancak hatayı gidermek için, önce user'ı validated_data'dan çıkaralım (eğer varsa),
-        # ve sonra View'den gelen user'ı kullanalım.
-
-        # Bu satır, View'den gelen user'ı (save(user=...)) alır.
-        user = self.context['request'].user 
-        
-        # 🚨 KRİTİK DÜZELTME: validated_data'dan user'ı çıkarın!
-        # Bu, potansiyel olarak validated_data'nın içindeki user objesini siler.
+        user = self.context['request'].user       
         validated_data.pop('user', None) 
-        
-        # Eğer View'de perform_create'i sadece serializer.save() olarak bıraksaydık, 
-        # bu daha karmaşık olurdu. Ama View'de user=user gönderildiği için:
         
         reply = Reply.objects.create(user=user, **validated_data)
         return reply

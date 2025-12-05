@@ -1,13 +1,11 @@
 import { fetchData } from './api.js';
 
 const mainContent = document.getElementById('main-content');
-
-// --- YARDIMCI MODAL VE REPLY FONKSİYONLARI ---
+let nextFeedUrl = null;
 
 /**
- * Yanıt dizisini (replies array) HTML listesine çevirir.
  * @param {Array<object>} replies 
- * @returns {string} HTML listesi
+ * @returns {string} 
  */
 const renderReplies = (replies) => {
     if (!replies || replies.length === 0) {
@@ -29,8 +27,6 @@ const renderReplies = (replies) => {
 
 
 /**
- * Review veya Rating objesine yanıt göndermek için modal açar.
- * (Bu kısım, form submission mantığı için gereklidir.)
  */
 const openReplyModal = (objectId, objectType) => {
     const modelName = objectType.toLowerCase();
@@ -61,7 +57,6 @@ const openReplyModal = (objectId, objectType) => {
 };
 
 /**
- * Yanıt gönderme formunu işler ve API'a POST isteği gönderir.
  */
 const handleReplySubmission = async (e) => {
     e.preventDefault();
@@ -77,7 +72,7 @@ const handleReplySubmission = async (e) => {
         await fetchData('replies/', 'POST', {
             text: text,
             object_id: parseInt(reviewId),
-            content_type: objectType // 'review' veya 'rating'
+            content_type: objectType 
         });
         
         statusElement.textContent = 'Yanıt başarıyla gönderildi!';
@@ -94,8 +89,6 @@ const handleReplySubmission = async (e) => {
     }
 };
 
-// --- ANA KART OLUŞTURMA FONKSİYONU ---
-
 const createActivityCard = (activity) => {
     const user = activity.user.username;
     const userProfileLink = `#profile/${activity.user.id}`;
@@ -109,26 +102,24 @@ const createActivityCard = (activity) => {
     let visualHtml = '';
     let footerHtml = '';
     let cardContentLink = '';
-    let repliesHtml = ''; // Yanıtları tutacak yeni değişken
+    let repliesHtml = ''; 
 
-    // Detayları aktivite tipine göre ayırıyoruz
-    if (activity.activity_type === 2) { // Yorum Aktivitesi (Review)
+    if (activity.activity_type === 2) { 
         reviewDetails = details?.review_details;
         content = reviewDetails?.content_data || details?.content_data; 
-        repliesHtml = renderReplies(reviewDetails?.replies); // ⭐ YANITLARI ÇEK
-    } else if (activity.activity_type === 1) { // Puanlama Aktivitesi (Rating)
+        repliesHtml = renderReplies(reviewDetails?.replies); 
+    } else if (activity.activity_type === 1) {
         content = details?.content_data;
-        repliesHtml = renderReplies(details?.replies); // ⭐ YANITLARI ÇEK
+        repliesHtml = renderReplies(details?.replies); 
     } else if (activity.activity_type === 3) {
         content = details?.content_data;
     }
     
-    // Geçersiz aktiviteyi atla
+
     if (!details || (!interactionObjectId && activity.activity_type !== 4)) {
         return '';
     }
 
-    // Görsel ve İçerik Linki Hazırlığı
     if (content && content.id) { 
         const coverUrl = content.poster_path || content.cover_url || 'placeholder.png';
         const contentType = details.content_type.toLowerCase();
@@ -143,10 +134,7 @@ const createActivityCard = (activity) => {
                 </a>
         `;
     }
-    
-    // --- Aktivite Tipine Göre İçerik Oluşturma ---
-    
-    // 1. Puanlama Aktivitesi (Rating - Tip 1)
+
     if (activity.activity_type === 1) {
         if (!content || !content.id) return '';
         
@@ -176,7 +164,6 @@ const createActivityCard = (activity) => {
             </div>
             ${repliesHtml} `;
 
-    // 2. Yorumlama Aktivitesi (Review - Tip 2)
     } else if (activity.activity_type === 2) {
         if (!reviewDetails || !content || !content.id) return ''; 
         
@@ -208,15 +195,13 @@ const createActivityCard = (activity) => {
             </div>
             ${repliesHtml} `;
 
-    // 3. Listeye Ekleme Aktivitesi (List_Add - Tip 3)
     } else if (activity.activity_type === 3) {
-         if (!content || !content.id) return '';
-         
+          if (!content || !content.id) return '';
+          
         actionHtml = `${cardContentLink} içeriğini **${details.list_name}** listesine ekledi.`;
         visualHtml += `</div>`; 
         footerHtml = '';
 
-    // 4. Takip Aktivitesi (Follow - Tip 4)
     } else if (activity.activity_type === 4) {
         const followedUserDetails = details?.followed_user; 
         
@@ -233,7 +218,6 @@ const createActivityCard = (activity) => {
         footerHtml = '';
     }
     
-    // Ana kart yapısı
     return `
         <div class="feed-card activity-type-${activity.activity_type}">
             <div class="card-header">
@@ -249,13 +233,9 @@ const createActivityCard = (activity) => {
     `;
 };
 
-// --- ANA YÜKLEME VE ETKİLEŞİM FONKSİYONLARI ---
-
 /**
- * Yorum beğenme (Like) ve yorum yapma (Comment) olaylarını API'a bağlar.
  */
 const setupFeedInteractions = () => {
-    // 1. Yorum Beğenme (Like Review/Rating) İşlemi
     document.querySelectorAll('.like-review-btn').forEach(button => {
         button.addEventListener('click', async (e) => {
             const interactionId = e.target.dataset.id;
@@ -292,7 +272,6 @@ const setupFeedInteractions = () => {
         });
     });
 
-    // 2. Yorum Yapma İşlemi (Modalı Açma)
     document.querySelectorAll('.comment-review-btn').forEach(button => {
         button.addEventListener('click', (e) => {
             const interactionId = e.target.dataset.reviewId;
@@ -305,21 +284,74 @@ const setupFeedInteractions = () => {
             openReplyModal(interactionId, objectType);
         });
     });
+    
+    document.getElementById('load-more-btn')?.addEventListener('click', loadMoreActivities);
 };
 
-export const renderFeedPage = async () => {
+
+const loadMoreActivities = async () => {
+    const feedListElement = document.getElementById('feed-list');
+    const loadMoreButton = document.getElementById('load-more-btn');
+    
+    if (!nextFeedUrl) {
+        loadMoreButton.style.display = 'none';
+        return;
+    }
+    
+    loadMoreButton.disabled = true;
+    loadMoreButton.textContent = 'Yükleniyor...';
+    
+    try {
+        const urlObj = new URL(nextFeedUrl);
+        
+        let apiPath = urlObj.pathname + urlObj.search; 
+        
+        if (apiPath.startsWith('/api/')) {
+            apiPath = apiPath.substring(5); 
+        }
+
+        const response = await fetchData(apiPath); 
+        
+        const activities = response.results || [];
+        
+        let html = activities.map(createActivityCard).join('');
+        feedListElement.insertAdjacentHTML('beforeend', html);
+        
+        nextFeedUrl = response.next;
+        
+        loadMoreButton.disabled = false;
+        loadMoreButton.textContent = 'Daha Fazla Yükle';
+        
+        if (!nextFeedUrl) {
+            loadMoreButton.style.display = 'none';
+        }
+        
+        setupFeedInteractions(); 
+
+    } catch (error) {
+        console.error("Daha fazla yüklenirken hata:", error);
+        loadMoreButton.textContent = 'Yükleme Hatası';
+        loadMoreButton.disabled = false;
+    }
+};
+
+export const renderFeedPage = async (url = 'feed/') => { 
     mainContent.innerHTML = `
         <div class="feed-header">
             <h2>Sosyal Akışınız</h2>
             <p id="loading-status">Akış verileri yükleniyor...</p>
         </div>
         <div id="feed-list"></div>
+        <div id="pagination-controls">
+             <button id="load-more-btn" style="display:none;">Daha Fazla Yükle</button>
+        </div>
     `;
     const feedListElement = document.getElementById('feed-list');
     const loadingStatus = document.getElementById('loading-status');
+    const loadMoreButton = document.getElementById('load-more-btn');
 
     try {
-        const response = await fetchData('feed/');
+        const response = await fetchData(url);
         
         const activities = response.results || [];
         
@@ -327,12 +359,19 @@ export const renderFeedPage = async () => {
         
         if (activities.length === 0) { 
             feedListElement.innerHTML = '<p class="info-message">Akışınızda gösterilecek aktivite bulunamadı. Lütfen bazı kullanıcıları takip edin.</p>';
+            loadMoreButton.style.display = 'none';
             return;
         }
 
         let html = activities.map(createActivityCard).join('');
         
         feedListElement.innerHTML = html;
+        
+        nextFeedUrl = response.next;
+
+        if (nextFeedUrl) {
+            loadMoreButton.style.display = 'block';
+        }
         
         setupFeedInteractions(); 
 

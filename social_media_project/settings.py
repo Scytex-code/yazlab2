@@ -173,3 +173,9 @@ ACCOUNT_EMAIL_VERIFICATION = 'optional'
 REST_AUTH = {
     'REGISTER_SERIALIZER': 'api.serializers.RegisterSerializer',
 }
+
+TMDB_API_KEY = "46c62a30b0d26eae4d273eb302ef8cb6"
+
+SITE_ID = 1
+
+PASSWORD_RESET_CONFIRM_URL = 'http://localhost:8080/#reset-password-confirm/{uid}/{token}'

@@ -25,7 +25,7 @@ export const renderProfilePage = async (userId) => {
 
         const firstName = userDetails.first_name || 'İsimsiz';
         const lastName = userDetails.last_name || '';
-        const username = userDetails.username || 'Kullanıcı'; // ⭐ USERNAME BURADAN GELİYOR
+        const username = userDetails.username || 'Kullanıcı'; 
         const email = userDetails.email || 'bilgi@yok';
         
         document.getElementById('profile-name').textContent = `${firstName} ${lastName} (@${username})`;
@@ -35,7 +35,6 @@ export const renderProfilePage = async (userId) => {
             <p><strong>E-posta:</strong> ${email}</p>
         `;
 
-        // ⭐ GÜNCELLEME 1: renderFollowButton'a username'i iletiyoruz
         renderFollowButton(userId, username, profileStatusData.is_owner, profileStatusData.is_following);
         
         document.getElementById('profile-content').innerHTML = `
@@ -48,11 +47,9 @@ export const renderProfilePage = async (userId) => {
     }
 };
 
-// ----------------------------------------------------------------------
-
 /**
  * @param {number} targetUserId 
- * @param {string} targetUsername // ⭐ YENİ PARAMETRE
+ * @param {string} targetUsername
  * @param {boolean} isOwner 
  * @param {boolean} isFollowing
  */
@@ -75,10 +72,8 @@ function renderFollowButton(targetUserId, targetUsername, isOwner, isFollowing) 
         try {
             if (method === 'POST') {
                 await fetchData(endpoint, 'POST', data);
-                // ⭐ GÜNCELLEME 2: Kullanıcı adını kullan
                 alert(`@${targetUsername} kullanıcısı takip edildi!`); 
             } else {
-                // Takipten çıkma mantığı (ID bulma)
                 const followsList = await fetchData(endpoint); 
                 
                 const followToDelete = followsList.results.find(follow => {
@@ -93,7 +88,6 @@ function renderFollowButton(targetUserId, targetUsername, isOwner, isFollowing) 
                 const followId = followToDelete.id;
                 await fetchData(`follows/${followId}/`, 'DELETE', null);
                 
-                // ⭐ GÜNCELLEME 3: Kullanıcı adını kullan
                 alert(`@${targetUsername} kullanıcısı takipten çıkarıldı!`); 
             }
             
@@ -105,8 +99,6 @@ function renderFollowButton(targetUserId, targetUsername, isOwner, isFollowing) 
         }
     });
 }
-
-// ----------------------------------------------------------------------
 
 const handleProfileUpdate = async (e, userId) => {
     e.preventDefault();

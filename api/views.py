@@ -29,40 +29,47 @@ class RatingViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         rating = serializer.save(user=self.request.user)
-        # ⭐ AKTİVİTE KAYDI EKLEME: Puanlama (Tip 1)
-        Activity.objects.create(
+
+        if not Activity.objects.filter(
             user=self.request.user,
-            activity_type=1, # Rating
-            content_object=rating # Rating objesini Activity'ye bağla
-        )
+            activity_type=1, 
+            object_id=rating.pk
+        ).exists():
+            Activity.objects.create(
+                user=self.request.user,
+                activity_type=1,
+                content_object=rating
+            )
 
 
 class ReviewViewSet(viewsets.ModelViewSet):
     serializer_class = ReviewSerializer
     permission_classes = [permissions.IsAuthenticated, IsOwnerOrReadOnly] 
     
-    # Tüm sorgu kümesini sadece ModelViewSet'in dahili işlemlerinde kullanması için tanımlıyoruz
     queryset = Review.objects.all() 
 
     def get_queryset(self):
-        # Bu metot LISTELEME (GET /reviews/) ve ModelViewSet'in diğer varsayılan işlemleri için kullanılır.
-        # Kendi yorumlarımızı listeler:
         if self.action == 'list':
             return Review.objects.filter(user=self.request.user)
         
-        # ⭐ KRİTİK DÜZELTME: Eğer işlem 'like' ise, tüm yorumları görebilmeliyiz.
         if self.action in ['like', 'retrieve']:
             return Review.objects.all()
             
-        return Review.objects.all() # Diğer işlemler için tamamını döndürür
+        return Review.objects.all() 
 
     def perform_create(self, serializer):
         review = serializer.save(user=self.request.user)
-        Activity.objects.create(
+        
+        if not Activity.objects.filter(
             user=self.request.user,
             activity_type=2, 
-            content_object=review
-        )
+            object_id=review.pk
+        ).exists():
+            Activity.objects.create(
+                user=self.request.user,
+                activity_type=2, 
+                content_object=review
+            )
         
     @action(detail=True, methods=['post'])
     def like(self, request, pk=None):
@@ -70,26 +77,21 @@ class ReviewViewSet(viewsets.ModelViewSet):
             return Response({"detail": "ID is missing."}, status=status.HTTP_400_BAD_REQUEST)
         
         target_object = None
-        
-        # 1. Review objesini bulmaya çalış
+
         try:
             target_object = Review.objects.get(pk=pk)
         except Review.DoesNotExist:
             pass
             
-        # 2. Review bulunamazsa, Rating objesini bulmaya çalış
         if target_object is None:
             try:
-                # Rating modelinin likes alanına erişim artık model güncellemesi sayesinde mümkün
                 target_object = Rating.objects.get(pk=pk) 
             except Rating.DoesNotExist:
                 pass
 
-        # 3. Hala bulamazsak, 404 döndür
         if target_object is None:
             return Response({"detail": "No Review or Rating found for this ID."}, status=status.HTTP_404_NOT_FOUND)
-        
-        # 4. Beğeni mantığını uygula (Hem Review hem Rating için çalışır)
+    
         user = request.user
         
         if user in target_object.likes.all():
@@ -98,8 +100,7 @@ class ReviewViewSet(viewsets.ModelViewSet):
         else:
             target_object.likes.add(user)
             return Response({'status': 'liked'}, status=status.HTTP_200_OK)
-
-# api/views.py dosyasına EKLENMESİ GEREKEN KISIM:
+        
 
 class FollowViewSet(viewsets.ModelViewSet):
     serializer_class = FollowSerializer
@@ -110,11 +111,10 @@ class FollowViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         follow = serializer.save(follower=self.request.user)
-        # ⭐ AKTİVİTE KAYDI EKLEME: Takip (Tip 4)
         Activity.objects.create(
-            user=self.request.user, # Takip eden kullanıcı
-            activity_type=4, # Follow
-            content_object=follow # Follow objesini Activity'ye bağla
+            user=self.request.user, 
+            activity_type=4,
+            content_object=follow
         )
 
 
@@ -357,13 +357,18 @@ class ListItemViewSet(viewsets.ModelViewSet):
         return ListItem.objects.filter(list__user=self.request.user)
     
     def perform_create(self, serializer):
-        list_item = serializer.save(user=self.request.user)
-        # ⭐ AKTİVİTE KAYDI EKLEME: Listeye Ekleme (Tip 3)
-        Activity.objects.create(
+        list_item = serializer.save()
+        
+        if not Activity.objects.filter(
             user=self.request.user,
-            activity_type=3, # List_Add
-            content_object=list_item # ListItem objesini Activity'ye bağla
-        )
+            activity_type=3,
+            object_id=list_item.pk
+        ).exists():
+            Activity.objects.create(
+                user=self.request.user,
+                activity_type=3, 
+                content_object=list_item 
+            )
 
 
 class ReplyViewSet(viewsets.ModelViewSet):
@@ -371,8 +376,115 @@ class ReplyViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        # Tüm yanıtları listelemek yerine, sadece ilgili Review/Rating'e ait olanları listeleriz
         return Reply.objects.all() 
         
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+
+class DiscoveryListView(generics.ListAPIView):
+    serializer_class = BookSerializer 
+    permission_classes = [permissions.IsAuthenticated]
+
+    def list(self, request, *args, **kwargs):
+        list_type = request.query_params.get('type', 'popular')
+        response_data = []
+
+        book_queryset = Book.objects.annotate(
+            avg_score=Avg('ratings__score'), 
+            review_count=Count('reviews'),
+            list_item_count=Count('list_items'),
+            
+            popularity_score=Count('reviews') + Count('list_items') 
+        )
+        movie_queryset = Movie.objects.annotate(
+            avg_score=Avg('ratings__score'),
+            review_count=Count('reviews'),
+            list_item_count=Count('list_items'),
+            
+            popularity_score=Count('reviews') + Count('list_items')
+        )
+        
+        if list_type == 'top_rated':
+            top_books = book_queryset.filter(avg_score__isnull=False).order_by('-avg_score', '-review_count')[:10]
+            top_movies = movie_queryset.filter(avg_score__isnull=False).order_by('-avg_score', '-review_count')[:10]
+            
+        elif list_type == 'popular':
+            top_books = book_queryset.order_by('-popularity_score', '-avg_score')[:10]
+            top_movies = movie_queryset.order_by('-popularity_score', '-avg_score')[:10]
+            
+        else:
+            top_books = book_queryset.order_by('-popularity_score', '-avg_score')[:10]
+            top_movies = movie_queryset.order_by('-popularity_score', '-avg_score')[:10]
+        
+        book_data = BookSerializer(top_books, many=True).data
+        for item in book_data:
+            item['content_type'] = 'Book'
+            response_data.append(item)
+            
+        movie_data = MovieSerializer(top_movies, many=True).data
+        for item in movie_data:
+            item['content_type'] = 'Movie'
+            response_data.append(item)
+
+        return Response(response_data, status=status.HTTP_200_OK)
+
+
+class ContentFilterView(generics.ListAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def list(self, request, *args, **kwargs):
+        genre = request.query_params.get('genre')
+        min_score = request.query_params.get('min_score')
+        year = request.query_params.get('year')
+
+        book_results = Book.objects.all()
+        movie_results = Movie.objects.all()
+
+        if min_score:
+            try:
+                min_score_float = float(min_score)
+                
+                book_results = book_results.annotate(
+                    avg_score=Avg('ratings__score')
+                ).filter(avg_score__gte=min_score_float, avg_score__isnull=False)
+                
+                movie_results = movie_results.annotate(
+                    avg_score=Avg('ratings__score')
+                ).filter(avg_score__gte=min_score_float, avg_score__isnull=False)
+                
+            except ValueError:
+                return Response({"detail": "min_score geçerli bir sayı olmalıdır."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if genre:
+            book_results = book_results.filter(genres_list__icontains=genre)
+            
+            movie_results = movie_results.filter(genres_list__icontains=genre)
+
+        if year:
+            try:
+                int(year) 
+                book_results = book_results.filter(publication_year=year) 
+            except ValueError:
+                 pass 
+            
+            movie_results = movie_results.filter(release_date__year=year) 
+        
+        response_data = []
+        
+        book_data = BookSerializer(book_results, many=True).data
+        for item in book_data:
+            item['content_type'] = 'Book'
+            item['avg_score'] = getattr(item, 'avg_score', None)
+            response_data.append(item)
+
+        movie_data = MovieSerializer(movie_results, many=True).data
+        for item in movie_data:
+            item['content_type'] = 'Movie'
+            item['avg_score'] = getattr(item, 'avg_score', None)
+            response_data.append(item)
+
+        if min_score:
+            response_data.sort(key=lambda x: x.get('avg_score', 0) or 0, reverse=True)
+            
+        return Response(response_data, status=status.HTTP_200_OK)

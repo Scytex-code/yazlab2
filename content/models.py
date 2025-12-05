@@ -1,7 +1,8 @@
 from django.db import models
-from django.contrib.contenttypes.fields import GenericForeignKey, GenericRelation # GenericRelation import'u zaten var
+from django.contrib.contenttypes.fields import GenericForeignKey, GenericRelation 
 from django.contrib.contenttypes.models import ContentType
 from users.models import CustomUser
+
 
 class Book(models.Model):
     google_books_id = models.CharField(max_length=50, unique=True)
@@ -11,6 +12,13 @@ class Book(models.Model):
     page_count = models.IntegerField(null=True, blank=True)
     cover_url = models.URLField(blank=True)
 
+    publication_year = models.IntegerField(null=True, blank=True) 
+    genres_list = models.TextField(blank=True, help_text="Virgülle ayrılmış tür listesi") 
+    
+    ratings = GenericRelation('Rating')
+    reviews = GenericRelation('Review')
+    list_items = GenericRelation('ListItem')
+
     def __str__(self):
         return self.title
     
@@ -18,9 +26,15 @@ class Book(models.Model):
 class Movie(models.Model):
     tmdb_id = models.IntegerField(unique=True)
     title = models.CharField(max_length=255)
-    overview = models.TextField(blank=True, null=True)
+    overview = models.TextField(blank=True, null=True) 
     release_date = models.DateField(blank=True, null=True)
     poster_path = models.URLField(blank=True, null=True)
+    director_name = models.CharField(max_length=255, blank=True, null=True)
+    actors_list = models.TextField(blank=True,)
+    genres_list = models.TextField(blank=True, help_text="Virgülle ayrılmış tür listesi")
+    ratings = GenericRelation('Rating')
+    reviews = GenericRelation('Review')
+    list_items = GenericRelation('ListItem')
 
     def __str__(self):
         return self.title
@@ -29,10 +43,8 @@ class Movie(models.Model):
 class Rating(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='ratings')
     
-    # ⭐ YENİ EKLEME: Beğenileri tutan alan
     likes = models.ManyToManyField(CustomUser, related_name='liked_ratings', blank=True)
     
-    # ⭐ ZORUNLU EKLEME: Yanıtları çekmek için GenericRelation
     replies = GenericRelation('Reply')
     
     score = models.IntegerField(choices=[(i, i) for i in range(1, 11)])
@@ -58,7 +70,6 @@ class Review(models.Model):
 
     likes = models.ManyToManyField(CustomUser, related_name='liked_reviews', blank=True)
     
-    # ⭐ ZORUNLU EKLEME: Yanıtları çekmek için GenericRelation
     replies = GenericRelation('Reply')
 
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)

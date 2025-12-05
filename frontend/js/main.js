@@ -1,6 +1,6 @@
 import { getToken, handleLogout, renderLoginPage, renderRegisterPage } from './auth.js';
 import { renderFeedPage } from './feed.js';
-import { renderSearchPage, renderContentDetailPage } from './content.js';
+import { renderSearchPage, renderContentDetailPage, renderDiscoverPage } from './content.js'; 
 import { renderProfilePage, renderProfileUpdatePage } from './profile.js'; 
 import { renderLibraryPage, renderListDetailPage } from './library.js';
 
@@ -49,6 +49,15 @@ const handleRoute = () => {
     } else if (route === 'library') {
         renderLibraryPage();
     } 
+    else if (route === 'discover') {
+        const hashIndex = fullHash.indexOf('?');
+        const params = new URLSearchParams(hashIndex !== -1 ? fullHash.substring(hashIndex) : '');
+        const filters = Object.fromEntries(params.entries());
+        
+        const mode = filters.genre || filters.year || filters.min_score ? 'filter' : 'discover';
+        
+        renderDiscoverPage(mode, filters);
+    }
     
     else if (route === 'profile/me/update') {
         if (!currentUserId) {
@@ -74,7 +83,10 @@ const handleRoute = () => {
         renderProfilePage(targetUserId);
 
     } else if (route === 'search') {
-        const query = new URLSearchParams(fullHash.substring(fullHash.indexOf('?'))).get('q');
+        const hashIndex = fullHash.indexOf('?');
+        const query = hashIndex !== -1 
+            ? new URLSearchParams(fullHash.substring(hashIndex)).get('q')
+            : null;
         renderSearchPage(query);
     } else if (route.startsWith('content/')) {
         const parts = route.split('/');

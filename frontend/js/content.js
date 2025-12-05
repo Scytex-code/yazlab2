@@ -10,13 +10,15 @@ const mainContent = document.getElementById('main-content');
  */
 const createContentCard = (content, type) => {
     const coverUrl = content.poster_path || content.cover_url || 'placeholder.png';
-    const creator = content.authors || content.director || 'Bilinmiyor';
+
+    const creator = type.toLowerCase() === 'book' ? content.authors : content.director_name; 
+    const creatorDisplay = creator || 'Bilinmiyor';
 
     return `
         <div class="content-card">
             <img src="${coverUrl}" alt="${content.title} Kapak" onerror="this.onerror=null;this.src='placeholder.png';" />
             <h3><a href="#content/${type.toLowerCase()}/${content.id}">${content.title}</a></h3>
-            <p>${type === 'Book' ? 'Yazar' : 'Yönetmen'}: ${creator}</p>
+            <p>${type.toLowerCase() === 'book' ? 'Yazar' : 'Yönetmen'}: ${creatorDisplay}</p>
         </div>
     `;
 };
@@ -62,6 +64,33 @@ export const renderContentDetailPage = async (contentType, contentId) => {
         const titleElement = document.getElementById('content-title');
         titleElement.textContent = details.title || 'Detay Sayfası';
 
+        let extraInfo = '';
+        if (contentType.toLowerCase() === 'movie') {
+            const director = details.director_name || 'Bilinmiyor';
+            const actors = details.actors_list || 'Yok';
+            const genres = details.genres_list || 'Yok';
+
+            extraInfo = `
+                <p><strong>Yönetmen:</strong> ${director}</p>
+                <p><strong>Oyuncular:</strong> ${actors.split(',').slice(0, 3).join(', ')}</p>
+                <p><strong>Türler:</strong> ${genres}</p>
+                <p><strong>Yayın Tarihi:</strong> ${details.release_date || 'Bilinmiyor'}</p>
+            `;
+        } else if (contentType.toLowerCase() === 'book') {
+             const authors = details.authors || 'Bilinmiyor';
+             const pages = details.page_count || 'Bilinmiyor';
+             
+             const bookYear = details.publication_year || 'Bilinmiyor';
+             const bookGenres = details.genres_list || 'Yok';
+
+             extraInfo = `
+                <p><strong>Yazarlar:</strong> ${authors}</p>
+                <p><strong>Türler:</strong> ${bookGenres}</p>
+                <p><strong>Yayın Yılı:</strong> ${bookYear}</p>
+                <p><strong>Sayfa Sayısı:</strong> ${pages}</p>
+             `;
+        }
+
         document.getElementById('content-details').innerHTML = `
             <div class="content-header-layout">
                 <div class="content-image">
@@ -72,6 +101,7 @@ export const renderContentDetailPage = async (contentType, contentId) => {
                     />
                 </div>
                 <div class="content-info">
+                    ${extraInfo} 
                     <p><strong>Özet:</strong> ${details.overview || details.description}</p>
                     <p><strong>Ortalama Puan:</strong> ${details.average_score ? details.average_score.toFixed(2) : 'Puanlanmamış'}</p>
                 </div>
@@ -274,4 +304,146 @@ const setupReviewActions = () => {
             }
         });
     });
+};
+
+/**
+ * @param {object} currentFilters
+ */
+const renderFilterControls = (currentFilters = {}) => {
+    const genres = [
+        "Aksiyon", "Macera", "Bilim Kurgu", "Fantastik", "Romantik", 
+        "Drama", "Korku", "Komedi", "Suç", "Gizem", "Gerilim", 
+        "Tarih", "Biyografi", "Savaş", "Müzikal", "Animasyon", 
+        "Belgesel", "Western", "Aile"
+    ];
+
+    const currentYear = new Date().getFullYear();
+    const years = Array.from({ length: 20 }, (_, i) => currentYear - i);
+
+    return `
+        <div class="filter-controls-container">
+            <h3>Filtreleme & Keşif</h3>
+            <form id="discovery-filter-form">
+                
+                <label for="filter-type">Vitrin:</label>
+                <select id="filter-type">
+                    <option value="top_rated" ${currentFilters.type === 'top_rated' ? 'selected' : ''}>⭐ En Yüksek Puanlılar</option>
+                    <option value="popular" ${currentFilters.type === 'popular' ? 'selected' : ''}>🔥 En Popülerler</option>
+                </select>
+                <button type="submit" data-action="discover">Göster</button>
+
+                <h4>Gelişmiş Filtreler</h4>
+                <div class="advanced-filters">
+                    <label for="filter-genre">Tür:</label>
+                    <select id="filter-genre">
+                        <option value="" ${!currentFilters.genre ? 'selected' : ''}>Tüm Türler</option>
+                        ${genres.map(g => `<option value="${g.toLowerCase()}" ${currentFilters.genre === g.toLowerCase() ? 'selected' : ''}>${g}</option>`).join('')}
+                    </select>
+
+                    <label for="filter-year">Yıl:</label>
+                    <select id="filter-year">
+                        <option value="" ${!currentFilters.year ? 'selected' : ''}>Tüm Yıllar</option>
+                        ${years.map(y => `<option value="${y}" ${currentFilters.year == y ? 'selected' : ''}>${y}</option>`).join('')}
+                    </select>
+                    
+                    <label for="filter-min-score">Min. Puan (0-10):</label>
+                    <input type="number" id="filter-min-score" min="0" max="10" value="${currentFilters.min_score || ''}" placeholder="Min Puan">
+                </div>
+                <button type="submit" data-action="filter">Filtrele</button>
+            </form>
+        </div>
+        <hr>
+    `;
+};
+
+
+/**
+ * @param {string} mode 
+ * @param {object} filters
+ */
+export const renderDiscoverPage = async (mode = 'discover', filters = {}) => {
+    mainContent.innerHTML = `
+        <h2>İçerik Keşfet</h2>
+        ${renderFilterControls(filters)}
+        <div id="discovery-results" class="content-grid">
+            <p id="discovery-status">İçerikler yükleniyor...</p>
+        </div>
+    `;
+
+    const statusElement = document.getElementById('discovery-status');
+    const resultsElement = document.getElementById('discovery-results');
+
+    let apiUrl = '';
+    
+    if (mode === 'discover') {
+        const type = filters.type || 'popular';
+        apiUrl = `discover/?type=${type}`;
+    } else if (mode === 'filter') {
+        let queryParams = new URLSearchParams();
+        if (filters.genre) queryParams.append('genre', filters.genre);
+        if (filters.min_score) queryParams.append('min_score', filters.min_score);
+        if (filters.year) queryParams.append('year', filters.year);
+        
+        if (queryParams.toString().length === 0) {
+             statusElement.textContent = "Lütfen en az bir filtre seçin.";
+             resultsElement.innerHTML = ''; 
+             return;
+        }
+
+        apiUrl = `filter/?${queryParams.toString()}`;
+    }
+    
+    try {
+        const response = await fetchData(apiUrl);
+        
+        statusElement.style.display = 'none';
+
+        if (response.length === 0) {
+            resultsElement.innerHTML = '<p class="info-message">Filtrelerinizle eşleşen içerik bulunamadı.</p>';
+            
+        } else {
+            const html = response.map(item => createContentCard(item, item.content_type)).join('');
+            resultsElement.innerHTML = html;
+        }
+
+
+    } catch (error) {
+        resultsElement.innerHTML = '<p class="error-message">İçerik yüklenemedi. Sunucu hatası oluştu.</p>';
+        statusElement.textContent = `Hata: ${error.message}`;
+        statusElement.style.display = 'block';
+        console.error("Discovery Hata:", error);
+    }
+    
+    document.getElementById('discovery-filter-form')?.addEventListener('submit', handleDiscoveryFormSubmit);
+};
+
+
+const handleDiscoveryFormSubmit = (e) => {
+    e.preventDefault();
+    const form = e.target;
+    const action = e.submitter.dataset.action; 
+
+    let filters = {};
+    
+    if (action === 'discover') {
+        filters.type = form.querySelector('#filter-type').value;
+        window.location.hash = `#discover?type=${filters.type}`;
+    } else if (action === 'filter') {
+        filters = {
+            genre: form.querySelector('#filter-genre').value,
+            year: form.querySelector('#filter-year').value,
+            min_score: form.querySelector('#filter-min-score').value,
+        };
+        Object.keys(filters).forEach(key => {
+            if (!filters[key]) delete filters[key];
+        });
+        
+        const queryParams = new URLSearchParams(filters).toString();
+        
+        if (queryParams.length > 0) {
+             window.location.hash = `#discover?${queryParams}`;
+        } else {
+             window.location.hash = `#discover`; 
+        }
+    }
 };
