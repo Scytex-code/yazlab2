@@ -194,12 +194,20 @@ const renderReviews = (reviews, contentTypeId, objectId) => {
 
     const reviewHtml = safeReviews.map(review => {
         const isOwner = currentUserId && (currentUserId === review.user.id);
+        const avatarUrl = review.user.avatar_url || 'https://via.placeholder.com/40/AAAAAA/FFFFFF?text=P'; 
         
         return `
-            <div class="review-item" data-review-id="${review.id}">
-                <strong><a href="#profile/${review.user.id}">${review.user.username}</a>:</strong>
-                <p id="review-text-${review.id}">${review.text}</p>
-                <small>${new Date(review.created_at).toLocaleString()}</small>
+            <div class="review-item content-review-card" data-review-id="${review.id}">
+                
+                <div class="review-user-header">
+                    <img src="${avatarUrl}" alt="${review.user.username} Avatar" class="review-user-avatar" />
+                    <div>
+                        <strong><a href="#profile/${review.user.id}">${review.user.username}</a></strong>
+                        <small> - ${new Date(review.created_at).toLocaleString()}</small>
+                    </div>
+                </div>
+
+                <p id="review-text-${review.id}" class="review-text">${review.text}</p>
                 
                 ${isOwner ? `
                     <div class="review-actions">
@@ -215,7 +223,7 @@ const renderReviews = (reviews, contentTypeId, objectId) => {
                 ` : ''}
             </div>
         `;
-    }).join('') || '<p>Bu içerik için henüz yorum yapılmamış.</p>';
+    }).join('') || '<p class="info-message">Bu içerik için henüz yorum yapılmamış.</p>';
 
     reviewListElement.innerHTML = formHtml + reviewHtml;
     
@@ -243,7 +251,6 @@ const setupReviewForm = (details, contentType) => {
         }
     });
 };
-
 
 const setupReviewActions = () => {
     document.querySelectorAll('.delete-review-btn').forEach(button => {

@@ -43,6 +43,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'first_name', 
             'last_name', 
             'avatar_url',
+            'bio',
             'followers_count',
             'following_count',
         ]
@@ -152,6 +153,7 @@ class FollowSerializer(serializers.ModelSerializer):
         return follow
 
 
+DEFAULT_AVATAR_URL = 'https://i.pinimg.com/736x/2c/47/d5/2c47d5dd5b532f83bb55c4cd6f5bd1ef.jpg'
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
     password2 = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
@@ -181,6 +183,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             password=validated_data['password'],
             first_name=validated_data.get('first_name', ''),
             last_name=validated_data.get('last_name', ''),
+            avatar_url=DEFAULT_AVATAR_URL 
         )
         return user
     
@@ -463,6 +466,8 @@ class ActivitySerializer(serializers.ModelSerializer):
                 if hasattr(source_object, 'likes'):
                     is_liked = source_object.likes.filter(pk=request.user.pk).exists()
 
+            rating_replies = NestedReplySerializer(source_object.replies.all(), many=True, context=self.context).data
+
             return {
                 'content_type': content_type_name,
                 'content_data': content_data,
@@ -470,6 +475,7 @@ class ActivitySerializer(serializers.ModelSerializer):
                 'rating_id': source_object.pk,
                 'likes_count': source_object.likes.count() if hasattr(source_object, 'likes') else 0,
                 'is_liked': is_liked,
+                'replies': rating_replies, 
             }
 
         elif obj.activity_type == 2:
@@ -500,8 +506,17 @@ class ActivitySerializer(serializers.ModelSerializer):
             }
             
         elif obj.activity_type == 4 and hasattr(source_object, 'following'):
+            followed_user_data = UserSerializer(source_object.following).data
+            
             return {
-                'followed_user': UserSerializer(source_object.following).data
+                'content_type': 'User',
+                'content_data': {
+                    'id': followed_user_data.get('id'),
+                    'title': f"Kullanıcı: {followed_user_data.get('username')}",
+                    'username': followed_user_data.get('username'),
+                    'avatar_url': followed_user_data.get('avatar_url'),
+                },
+                'followed_user': followed_user_data
             }
             
         return None

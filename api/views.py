@@ -111,11 +111,17 @@ class FollowViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         follow = serializer.save(follower=self.request.user)
-        Activity.objects.create(
+        
+        if not Activity.objects.filter(
             user=self.request.user, 
-            activity_type=4,
-            content_object=follow
-        )
+            activity_type=4, 
+            object_id=follow.pk, 
+        ).exists():
+            Activity.objects.create(
+                user=self.request.user, 
+                activity_type=4,
+                content_object=follow
+            )
 
 
 class RegisterAPIView(APIView):
@@ -488,3 +494,20 @@ class ContentFilterView(generics.ListAPIView):
             response_data.sort(key=lambda x: x.get('avg_score', 0) or 0, reverse=True)
             
         return Response(response_data, status=status.HTTP_200_OK)
+    
+
+class UserActivityListView(generics.ListAPIView):
+    serializer_class = ActivitySerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user_pk = self.kwargs.get('pk')
+        
+        try:
+            target_user = CustomUser.objects.get(pk=user_pk)
+        except CustomUser.DoesNotExist:
+            raise NotFound("Bu ID'ye sahip kullanıcı bulunamadı.")
+
+        queryset = Activity.objects.filter(user=target_user).select_related('user').order_by('-created_at')
+        
+        return queryset

@@ -5,25 +5,56 @@ import { renderProfilePage, renderProfileUpdatePage } from './profile.js';
 import { renderLibraryPage, renderListDetailPage } from './library.js';
 
 const mainContent = document.getElementById('main-content');
-const authNav = document.getElementById('auth-nav');
-const publicNav = document.getElementById('public-nav');
+const authNav = document.getElementById('auth-nav-links'); 
+const publicNav = document.getElementById('public-nav-links'); 
 const searchBar = document.getElementById('search-bar');
+
+const hideAllNavs = () => {
+    if (authNav) authNav.style.display = 'none';
+    if (publicNav) publicNav.style.display = 'none';
+    if (searchBar) searchBar.style.display = 'none';
+};
 
 const getCurrentUserId = () => {
     return localStorage.getItem('user_id') || null; 
 };
 
+/**
+ */
 const updateNavigation = (isAuthenticated) => {
+    hideAllNavs(); 
+
     if (isAuthenticated) {
-        if (authNav) authNav.style.display = 'flex';
-        if (publicNav) publicNav.style.display = 'none';
-        if (searchBar) searchBar.style.display = 'block'; 
+        if (authNav) authNav.style.display = 'flex'; 
+        if (searchBar) searchBar.style.display = 'flex'; 
     } else {
-        if (authNav) authNav.style.display = 'none';
-        if (publicNav) publicNav.style.display = 'block';
-        if (searchBar) searchBar.style.display = 'none'; 
+        if (publicNav) publicNav.style.display = 'flex'; 
     }
 };
+
+/**
+ */
+const setActiveNav = (route) => {
+    document.querySelectorAll('#nav a').forEach(a => {
+        a.classList.remove('active-nav');
+    });
+
+    let selector = `#nav a[href="#${route}"]`;
+    
+    if (route.startsWith('profile/')) {
+         selector = `#nav a[href="#profile/me"]`;
+    } else if (route.startsWith('list/') || route.startsWith('content/')) {
+         selector = `#nav a[href="#library"]`;
+    } else if (route === '' || route === 'feed') {
+         selector = `#nav a[href="#feed"]`;
+    }
+
+    const activeLink = document.querySelector(selector);
+    if (activeLink) {
+        activeLink.classList.add('active-nav');
+    }
+};
+
 
 const handleRoute = () => {
     const fullHash = window.location.hash.substring(1); 
@@ -61,8 +92,8 @@ const handleRoute = () => {
     
     else if (route === 'profile/me/update') {
         if (!currentUserId) {
-             window.location.hash = '#login';
-             return;
+            window.location.hash = '#login';
+            return;
         }
         renderProfileUpdatePage(currentUserId);
     } 
@@ -75,7 +106,7 @@ const handleRoute = () => {
             targetUserId = currentUserId;
         }
 
-        if (!targetUserId || targetUserId === 'null') {
+        if (!targetUserId || targetUserId === 'null' || targetUserId === 'me') {
             window.location.hash = '#login';
             return; 
         }
@@ -99,7 +130,12 @@ const handleRoute = () => {
     } else {
         window.location.hash = '#feed'; 
     }
+    
+    setActiveNav(route); 
 };
 
 window.addEventListener('hashchange', handleRoute); 
-document.addEventListener('DOMContentLoaded', handleRoute);
+document.addEventListener('DOMContentLoaded', () => {
+    hideAllNavs();
+    handleRoute();
+});

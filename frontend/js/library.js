@@ -248,7 +248,7 @@ export const renderListDetailPage = async (listId) => {
 
         let html = listItems.map(item => { 
             const content = item.content_details; 
- 
+
             const type = (content.content_type || 'Bilinmiyor').toLowerCase(); 
 
             const coverUrl = content.poster_path || content.cover_url || 'placeholder.png';
@@ -258,10 +258,12 @@ export const renderListDetailPage = async (listId) => {
                 <div class="content-card">
                     <h3><a href="#content/${type}/${content.id}">${content.title}</a></h3> 
                     <p>${type.charAt(0).toUpperCase() + type.slice(1)}: ${creator}</p> 
-                    <button class="remove-list-item" data-item-id="${item.id}">Listeden Çıkar</button>
+
                     <div class="card-image-container">
-                     <img src="${coverUrl}" alt="${content.title} Kapak" onerror="this.onerror=null;this.src='placeholder.png';" />
-                     </div>
+                        <img src="${coverUrl}" alt="${content.title} Kapak" onerror="this.onerror=null;this.src='placeholder.png';" />
+                    </div>
+                    
+                    <button class="remove-list-item" data-item-id="${item.id}">Listeden Çıkar</button>
                 </div>
             `;
         }).join('');

@@ -13,11 +13,18 @@ const renderReplies = (replies) => {
     }
     
     const replyItems = replies.map(reply => {
+        const avatar = reply.user.avatar_url ? 
+            `<img src="${reply.user.avatar_url}" alt="${reply.user.username}" class="reply-avatar" />` : 
+            '';
+
         return `
             <div class="reply-item">
-                <strong><a href="#profile/${reply.user.id}">${reply.user.username}</a>:</strong>
-                <span>${reply.text}</span>
-                <small>(${new Date(reply.created_at).toLocaleTimeString()})</small>
+                ${avatar}
+                <div class="reply-content">
+                    <strong><a href="#profile/${reply.user.id}">${reply.user.username}</a>:</strong>
+                    <span>${reply.text}</span>
+                    <small>(${new Date(reply.created_at).toLocaleTimeString()})</small>
+                </div>
             </div>
         `;
     }).join('');
@@ -89,33 +96,44 @@ const handleReplySubmission = async (e) => {
     }
 };
 
+/**
+ * @param {object} activity 
+ * @returns {string} 
+ */
 const createActivityCard = (activity) => {
     const user = activity.user.username;
     const userProfileLink = `#profile/${activity.user.id}`;
+    const userAvatar = activity.user.avatar_url || 'https://via.placeholder.com/30/AAAAAA/FFFFFF?text=P';
     const details = activity.content_object_details;
     
     const interactionObjectId = activity.object_id; 
     
     let content = null;
     let reviewDetails = null;
-    let actionHtml = '';
+    let actionText = ''; 
     let visualHtml = '';
     let footerHtml = '';
-    let cardContentLink = '';
+    let cardContentLinkHtml = ''; 
     let repliesHtml = ''; 
+    let activityClass = ''; 
 
-    if (activity.activity_type === 2) { 
+    if (activity.activity_type === 1) { 
+        content = details?.content_data;
+        repliesHtml = renderReplies(details?.replies); 
+        activityClass = 'activity-type-rating';
+    } else if (activity.activity_type === 2) {
         reviewDetails = details?.review_details;
         content = reviewDetails?.content_data || details?.content_data; 
         repliesHtml = renderReplies(reviewDetails?.replies); 
-    } else if (activity.activity_type === 1) {
-        content = details?.content_data;
-        repliesHtml = renderReplies(details?.replies); 
+        activityClass = 'activity-type-review';
     } else if (activity.activity_type === 3) {
         content = details?.content_data;
+        activityClass = 'activity-type-list_add';
+    } else if (activity.activity_type === 4) {
+        activityClass = 'activity-type-follow';
     }
     
-
+    
     if (!details || (!interactionObjectId && activity.activity_type !== 4)) {
         return '';
     }
@@ -125,7 +143,7 @@ const createActivityCard = (activity) => {
         const contentType = details.content_type.toLowerCase();
         const contentDetailLink = `#content/${contentType}/${content.id}`;
         
-        cardContentLink = `<a href="${contentDetailLink}"><strong>${content.title}</strong></a>`;
+        cardContentLinkHtml = `<a href="${contentDetailLink}"><strong>${content.title}</strong></a>`;
         
         visualHtml = `
             <div class="activity-visual">
@@ -136,10 +154,8 @@ const createActivityCard = (activity) => {
     }
 
     if (activity.activity_type === 1) {
-        if (!content || !content.id) return '';
-        
         const score = details.score;
-        actionHtml = `${cardContentLink} içeriğine **Puan Verdi**`;
+        actionText = `${cardContentLinkHtml} içeriğine **${score}/10 Puan Verdi**`;
         
         const likesCount = details.likes_count || 0; 
         const isLiked = details.is_liked || false;
@@ -147,26 +163,24 @@ const createActivityCard = (activity) => {
         const likeButtonText = isLiked ? 'Beğendin' : 'Beğen';
         
         visualHtml += `
-                <div class="score-overlay">
-                    <span class="score-text">${score}/10</span>
-                </div>
+            <div class="score-overlay">
+                <span class="score-text">${score}/10</span>
             </div>
+            </div> 
         `;
         
         footerHtml = `
             <div class="card-footer">
-                <small>Puan: ${score}/10</small> 
                 <span class="like-count" data-review-id="${interactionObjectId}">${likesCount} Beğeni</span>
                 <button class="action-btn like-review-btn ${likeButtonClass}" data-id="${interactionObjectId}" data-is-liked="${isLiked}">
                     ${likeButtonText}
                 </button> 
                 <button class="action-btn comment-review-btn" data-review-id="${interactionObjectId}">Yorum Yap</button>
             </div>
-            ${repliesHtml} `;
+            ${repliesHtml} 
+        `;
 
-    } else if (activity.activity_type === 2) {
-        if (!reviewDetails || !content || !content.id) return ''; 
-        
+    } else if (activity.activity_type === 2) { 
         const fullText = reviewDetails.text || details.review_excerpt;
         const excerpt = fullText.length > 200 ? fullText.substring(0, 200) + '...' : fullText;
         
@@ -175,13 +189,13 @@ const createActivityCard = (activity) => {
         const likeButtonClass = isLiked ? 'btn-liked' : 'btn-default';
         const likeButtonText = isLiked ? 'Beğendin' : 'Beğen';
 
-        actionHtml = `${cardContentLink} içeriği hakkında **Yorum Yaptı**`;
+        actionText = `${cardContentLinkHtml} içeriği hakkında **Yorum Yaptı**`;
         
         visualHtml += `
-                <div class="review-excerpt-overlay">
-                    <p>"${excerpt}"</p>
-                    <a href="#content/${details.content_type.toLowerCase()}/${content.id}" class="read-more-link">...daha fazlasını oku</a>
-                </div>
+            <div class="review-excerpt-overlay">
+                <p>"${excerpt}"</p>
+                <a href="#content/${details.content_type.toLowerCase()}/${content.id}" class="read-more-link">...daha fazlasını oku</a>
+            </div>
             </div>
         `;
         
@@ -193,35 +207,31 @@ const createActivityCard = (activity) => {
                 </button> 
                 <button class="action-btn comment-review-btn" data-review-id="${interactionObjectId}">Yorum Yap</button>
             </div>
-            ${repliesHtml} `;
+            ${repliesHtml} 
+        `;
 
     } else if (activity.activity_type === 3) {
-          if (!content || !content.id) return '';
-          
-        actionHtml = `${cardContentLink} içeriğini **${details.list_name}** listesine ekledi.`;
-        visualHtml += `</div>`; 
+        actionText = `${cardContentLinkHtml} içeriğini **${details.list_name}** listesine ekledi.`;
+        visualHtml += `</div>`;
         footerHtml = '';
 
-    } else if (activity.activity_type === 4) {
+    } else if (activity.activity_type === 4) { 
         const followedUserDetails = details?.followed_user; 
+        const followedUser = followedUserDetails?.username;
+        const followedUserId = followedUserDetails?.id;
         
-        if (followedUserDetails && followedUserDetails.id) {
-            const followedUser = followedUserDetails.username;
-            const followedUserId = followedUserDetails.id;
-            
-            actionHtml = ` yeni bir kullanıcıyı takip etmeye başladı: <a href="#profile/${followedUserId}">@${followedUser}</a>`;
-        } else {
-            actionHtml = ` yeni bir kullanıcıyı takip etmeye başladı.`;
-        }
-        
-        visualHtml = ''; 
+        actionText = ` yeni bir kullanıcıyı takip etmeye başladı: <a href="#profile/${followedUserId}">@${followedUser}</a>`;
+        visualHtml = '';
         footerHtml = '';
     }
     
     return `
-        <div class="feed-card activity-type-${activity.activity_type}">
+        <div class="feed-card ${activityClass}">
             <div class="card-header">
-                <strong><a href="${userProfileLink}">${user}</a></strong> ${actionHtml}
+                <img src="${userAvatar}" alt="${user} Avatar" class="user-avatar-small" />
+                <span class="header-text">
+                    <strong><a href="${userProfileLink}">${user}</a></strong> ${actionText}
+                </span>
             </div>
             
             ${visualHtml}
@@ -243,8 +253,8 @@ const setupFeedInteractions = () => {
             const countElement = document.querySelector(`.like-count[data-review-id="${interactionId}"]`);
             
             if (!interactionId || interactionId === 'undefined') {
-                 alert('HATA: Beğenilecek aktivite ID\'si bulunamadı. Lütfen Backend/Serileştiriciyi kontrol edin.');
-                 return;
+                alert('HATA: Beğenilecek aktivite ID\'si bulunamadı. Lütfen Backend/Serileştiriciyi kontrol edin.');
+                return;
             }
             
             try {
@@ -275,16 +285,13 @@ const setupFeedInteractions = () => {
     document.querySelectorAll('.comment-review-btn').forEach(button => {
         button.addEventListener('click', (e) => {
             const interactionId = e.target.dataset.reviewId;
-            
             const card = e.target.closest('.feed-card');
-            const isReview = card.classList.contains('activity-type-2'); 
-            
+            const isReview = card.classList.contains('activity-type-review');  
             const objectType = isReview ? 'Review' : 'Rating'; 
             
             openReplyModal(interactionId, objectType);
         });
     });
-    
     document.getElementById('load-more-btn')?.addEventListener('click', loadMoreActivities);
 };
 
@@ -343,7 +350,7 @@ export const renderFeedPage = async (url = 'feed/') => {
         </div>
         <div id="feed-list"></div>
         <div id="pagination-controls">
-             <button id="load-more-btn" style="display:none;">Daha Fazla Yükle</button>
+            <button id="load-more-btn" class="action-btn" style="display:none;">Daha Fazla Yükle</button>
         </div>
     `;
     const feedListElement = document.getElementById('feed-list');
